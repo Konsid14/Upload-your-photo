@@ -2,63 +2,114 @@
 <html lang="el">
 <head>
     <meta charset="UTF-8">
-    <title>Ανέβασμα Φωτογραφίας</title>
+    <title>PhotoShare</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 2em; }
-        #preview { margin-top: 1em; max-width: 300px; }
-        #photos { margin-top: 2em; }
-        .photo-item { margin: 10px 0; }
-        img { max-width: 200px; display: block; }
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        #login, #register, #upload, #gallery { margin-bottom: 30px; }
+        img { max-width: 200px; margin: 10px; border-radius: 8px; }
+        .photo { display: inline-block; text-align: center; }
     </style>
 </head>
 <body>
-    <h1>Τράβηξε ή Ανέβασε Φωτογραφία</h1>
-    <form id="photoForm">
-        <input type="file" accept="image/*" capture="environment" id="photoInput" required>
-        <button type="submit">Ανέβασμα Φωτογραφίας</button>
-    </form>
-    <img id="preview" src="" alt="Προεπισκόπηση Φωτογραφίας" style="display:none;"/>
-    <div id="photos">
-        <h2>Ανεβασμένες Φωτογραφίες</h2>
-        <div id="photoList"></div>
+    <h1>PhotoShare</h1>
+    <div id="auth">
+        <div id="register">
+            <h2>Εγγραφή</h2>
+            <input id="reg-username" placeholder="Όνομα χρήστη">
+            <input id="reg-password" type="password" placeholder="Κωδικός">
+            <button onclick="register()">Εγγραφή</button>
+        </div>
+        <div id="login">
+            <h2>Σύνδεση</h2>
+            <input id="login-username" placeholder="Όνομα χρήστη">
+            <input id="login-password" type="password" placeholder="Κωδικός">
+            <button onclick="login()">Σύνδεση</button>
+        </div>
+    </div>
+    <div id="user-area" style="display:none;">
+        <h2>Καλώς ήρθες, <span id="user"></span>!</h2>
+        <button onclick="logout()">Αποσύνδεση</button>
+        <div id="upload">
+            <h3>Ανέβασε φωτογραφία</h3>
+            <input type="file" id="photo-input" accept="image/*">
+            <button onclick="uploadPhoto()">Ανέβασμα</button>
+        </div>
+        <div id="gallery">
+            <h3>Φωτογραφίες χρηστών</h3>
+            <div id="photos"></div>
+        </div>
     </div>
     <script>
-        const photoInput = document.getElementById('photoInput');
-        const preview = document.getElementById('preview');
-        const photoForm = document.getElementById('photoForm');
-        const photoList = document.getElementById('photoList');
+        // Simple in-memory "database"
+        let users = JSON.parse(localStorage.getItem('users') || '{}');
+        let photos = JSON.parse(localStorage.getItem('photos') || '[]');
+        let currentUser = localStorage.getItem('currentUser');
 
-        // Προεπισκόπηση όταν επιλέγεται φωτογραφία
-        photoInput.addEventListener('change', function() {
-            const file = photoInput.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    preview.src = e.target.result;
-                    preview.style.display = 'block';
-                };
-                reader.readAsDataURL(file);
-            } else {
-                preview.style.display = 'none';
-            }
-        });
+        function save() {
+            localStorage.setItem('users', JSON.stringify(users));
+            localStorage.setItem('photos', JSON.stringify(photos));
+        }
 
-        // Ανέβασμα φωτογραφίας (μόνο τοπικά)
-        photoForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const file = photoInput.files[0];
-            if (!file) return;
+        function register() {
+            const u = document.getElementById('reg-username').value;
+            const p = document.getElementById('reg-password').value;
+            if (!u || !p) return alert('Συμπλήρωσε όλα τα πεδία!');
+            if (users[u]) return alert('Το όνομα χρήστη υπάρχει ήδη!');
+            users[u] = { password: p };
+            save();
+            alert('Εγγραφή επιτυχής! Κάνε σύνδεση.');
+        }
+
+        function login() {
+            const u = document.getElementById('login-username').value;
+            const p = document.getElementById('login-password').value;
+            if (!users[u] || users[u].password !== p) return alert('Λάθος στοιχεία!');
+            currentUser = u;
+            localStorage.setItem('currentUser', currentUser);
+            showUserArea();
+        }
+
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('currentUser');
+            document.getElementById('user-area').style.display = 'none';
+            document.getElementById('auth').style.display = '';
+        }
+
+        function showUserArea() {
+            document.getElementById('auth').style.display = 'none';
+            document.getElementById('user-area').style.display = '';
+            document.getElementById('user').textContent = currentUser;
+            renderPhotos();
+        }
+
+        function uploadPhoto() {
+            const input = document.getElementById('photo-input');
+            if (!input.files.length) return alert('Διάλεξε φωτογραφία!');
+            const file = input.files[0];
             const reader = new FileReader();
             reader.onload = function(e) {
-                const img = document.createElement('img');
-                img.src = e.target.result;
-                const div = document.createElement('div');
-                div.className = 'photo-item';
-                div.appendChild(img);
-                photoList.prepend(div);
-                preview.style.display = 'none';
-                photoForm.reset();
+                photos.push({ user: currentUser, src: e.target.result });
+                save();
+                renderPhotos();
+                input.value = '';
             };
             reader.readAsDataURL(file);
-        });
+        }
+
+        function renderPhotos() {
+            const container = document.getElementById('photos');
+            container.innerHTML = '';
+            photos.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'photo';
+                div.innerHTML = `<img src="${p.src}"><br><small>${p.user}</small>`;
+                container.appendChild(div);
+            });
+        }
+
+        // On load
+        if (currentUser && users[currentUser]) showUserArea();
     </script>
+</body>
+</html>
